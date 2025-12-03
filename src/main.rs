@@ -1,5 +1,5 @@
 use std::{
-    io::{BufRead, stdin},
+    io::{stdin, BufRead},
     ops::Deref,
     str::FromStr,
 };
@@ -18,15 +18,17 @@ enum Direction {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct Mod100(u32);
-
-impl Mod100 {
-    const ZERO: Mod100 = Mod100(0);
+struct Mod100 {
+    pub value: i32,
+    pub wrap: u32,
 }
 
-impl From<u32> for Mod100 {
-    fn from(value: u32) -> Self {
-        Mod100(value % 100)
+impl From<i32> for Mod100 {
+    fn from(value: i32) -> Self {
+        Mod100 {
+            value: value % 100,
+            wrap: (value / 100).unsigned_abs(),
+        }
     }
 }
 
@@ -34,7 +36,24 @@ impl std::ops::Add for Mod100 {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        Mod100::from(self.0 + rhs.0)
+        if self.value == 0 {
+            Mod100 {
+                value: rhs.value.rem_euclid(100),
+                wrap: self.wrap + rhs.wrap,
+            }
+        } else {
+            let val = self.value + rhs.value;
+            match val {
+                v if !(1..100).contains(&v) => Mod100 {
+                    value: v.rem_euclid(100),
+                    wrap: self.wrap + rhs.wrap + 1,
+                },
+                _ => Mod100 {
+                    value: val,
+                    wrap: self.wrap + rhs.wrap,
+                },
+            }
+        }
     }
 }
 
@@ -42,15 +61,32 @@ impl std::ops::Sub for Mod100 {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Mod100::from(100 + self.0 - rhs.0)
+        if self.value == 0 {
+            Mod100 {
+                value: rhs.value.rem_euclid(100),
+                wrap: self.wrap + rhs.wrap,
+            }
+        } else {
+            let val = self.value - rhs.value;
+            match val {
+                v if !(1..100).contains(&v) => Mod100 {
+                    value: v.rem_euclid(100),
+                    wrap: self.wrap + rhs.wrap + 1,
+                },
+                _ => Mod100 {
+                    value: val,
+                    wrap: self.wrap + rhs.wrap,
+                },
+            }
+        }
     }
 }
 
 impl Deref for Mod100 {
-    type Target = u32;
+    type Target = i32;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.value
     }
 }
 
@@ -58,7 +94,7 @@ impl FromStr for Mod100 {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let value: u32 = s.parse().map_err(|_| Error::ParseNumber)?;
+        let value: i32 = s.parse().map_err(|_| Error::ParseNumber)?;
         Ok(Mod100::from(value))
     }
 }
@@ -82,35 +118,40 @@ impl FromStr for Row {
                 "R" => Direction::Right,
                 _ => return Err(Error::ParseDirection),
             },
-            count: count.parse()?,
+            count: count.parse().map_err(|_| Error::ParseNumber)?,
         })
     }
 }
 
 fn main() {
     println!(
-        "{}",
+        "{:?}",
         stdin()
             .lock()
             .lines()
-            .map(|v| v.map_err(|_| Error::Io).and_then(|v| v.parse::<Row>()))
-            .fold((0, Mod100(50)), |(res, cursor), row| match row {
-                Ok(Row {
-                    direction: Direction::Left,
-                    count,
-                }) => match cursor - count {
-                    Mod100::ZERO => (res + 1, 0.into()),
-                    v => (res, v),
-                },
-                Ok(Row {
-                    direction: Direction::Right,
-                    count,
-                }) => match cursor + count {
-                    Mod100::ZERO => (res + 1, 0.into()),
-                    v => (res, v),
-                },
-                _ => (res, cursor),
+            .map(|v| {
+                v.map_err(|_| Error::Io)
+                    .and_then(|v| v.parse::<Row>())
+                    .map(|v| match v {
+                        Row {
+                            direction: Direction::Left,
+                            count,
+                        } => Mod100 {
+                            value: -count.value,
+                            wrap: count.wrap,
+                        },
+                        Row {
+                            direction: Direction::Right,
+                            count,
+                        } => count,
+                    })
             })
-            .0,
-    )
+            .fold(Mod100::from(50), |cursor, op| {
+                if let Ok(movement) = op {
+                    cursor + movement
+                } else {
+                    cursor
+                }
+            })
+    );
 }
