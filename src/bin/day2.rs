@@ -25,20 +25,32 @@ impl Range {
         let lhs = self.left.parse::<i64>().unwrap();
         let rhs = self.right.parse::<i64>().unwrap();
         (self.left.len()..=self.right.len())
-            .filter_map(|v| match v % 2 {
-                1 => None,
-                0 => Some(10_i64.pow(v as u32 / 2) + 1),
-                _ => unreachable!(),
-            })
-            .flat_map(move |r| {
-                (match lhs % r {
-                    0 => lhs,
-                    _ => lhs + (r - (lhs % r)),
-                }
-                .max(r * (r / 10))..=rhs.min(r * (r - 2)))
-                    .step_by(r as usize)
+            .flat_map(patterns)
+            .flat_map(move |(range, len)| {
+                (nearest_next_multiple(lhs, range)
+                    .max(nearest_next_multiple(10_i64.pow(len - 1), range))
+                    ..=rhs.min(10_i64.pow(len) - 1))
+                    .step_by(range as usize)
             })
     }
+}
+
+fn nearest_next_multiple(value: i64, multiple: i64) -> i64 {
+    match value % multiple {
+        0 => value,
+        _ => value + (multiple - (value % multiple)),
+    }
+}
+
+fn patterns(len: usize) -> impl Iterator<Item = (i64, u32)> {
+    (1..len).filter(move |v| len.is_multiple_of(*v)).map(move |factor| {
+        (
+            (0..len / factor)
+                .map(|count| 10_i64.pow(count as u32 * factor as u32))
+                .sum::<i64>(),
+            len as u32,
+        )
+    })
 }
 
 fn main() {
@@ -53,6 +65,24 @@ fn main() {
             .flatten()
             .flat_map(|v| v.parse::<Range>().ok())
             .flat_map(Range::resolve)
+            .collect::<std::collections::HashSet<_>>()
+            .iter()
             .sum::<i64>()
     );
+}
+
+#[cfg(test)]
+mod test{
+    use super::patterns;
+    #[test]
+    fn test_patterns(){
+        let result:Vec<(i64,u32)>=patterns(4).collect();
+        assert_eq!(result,vec![(1111,4),(101,4)]);
+        let result:Vec<(i64,u32)>=patterns(5).collect();
+        assert_eq!(result,vec![(11111, 5)]);
+        let result:Vec<(i64,u32)>=patterns(8).collect();
+        assert_eq!(result,vec![(11111111, 8), (1010101, 8), (10001, 8)]);
+        let result:Vec<(i64,u32)>=patterns(9).collect();
+        assert_eq!(result,vec![(111111111, 9), (1001001, 9)]);
+    }
 }
