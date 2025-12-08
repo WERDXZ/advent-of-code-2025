@@ -1,10 +1,8 @@
-#![feature(range_into_bounds)]
-#![feature(range_bounds_is_empty)]
 use std::io::{BufRead, stdin};
-use std::ops::{IntoBounds, RangeBounds, RangeInclusive};
+use std::ops::RangeInclusive;
 
 fn main() {
-    let ranges: Vec<RangeInclusive<u64>> = stdin()
+    let mut ranges: Vec<RangeInclusive<u64>> = stdin()
         .lock()
         .lines()
         .map_while(|line| {
@@ -17,39 +15,29 @@ fn main() {
                 })
             })
         })
-        .fold(Vec::<RangeInclusive<u64>>::new(), |mut vec, range| {
-            let index = vec.iter().enumerate().find_map(|(index, value)| {
-                if value.clone().intersect(range.clone()).is_empty() {
-                    None
+        .collect();
+
+    ranges.sort_by_key(|r| *r.start());
+
+    let ranges =
+        ranges
+            .into_iter()
+            .fold(Vec::new(), |mut merged: Vec<RangeInclusive<u64>>, range| {
+                if let Some(last) = merged.last_mut() {
+                    // Check if overlapping or adjacent (end + 1 >= start)
+                    if *last.end() + 1 >= *range.start() {
+                        // Extend end if needed
+                        if *range.end() > *last.end() {
+                            *last = *last.start()..=*range.end();
+                        }
+                    } else {
+                        merged.push(range);
+                    }
                 } else {
-                    Some(index)
+                    merged.push(range);
                 }
+                merged
             });
-            if let Some(index) = index {
-                let existing = vec[index].clone();
-                let new_range =
-                    *existing.start().min(range.start())..=*existing.end().max(range.end());
-                vec.remove(index);
-                vec.push(new_range);
-                vec
-            } else {
-                vec.push(range);
-                vec
-            }
-        });
 
-    let queries: u64 = stdin()
-        .lock()
-        .lines()
-        .map_while(|line| line.ok().and_then(|line| line.parse::<u64>().ok()))
-        .map(|v| {
-            if ranges.iter().any(|range| range.contains(&v)) {
-                1
-            } else {
-                0
-            }
-        })
-        .sum();
-
-    println!("{}", queries);
+    println!("{}", ranges.into_iter().map(|v| v.count()).sum::<usize>());
 }
