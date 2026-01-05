@@ -115,7 +115,7 @@ fn inside_polygon(point: &Point, verticals: &Vec<[Point; 2]>) -> bool {
             (edge[1].y, edge[0].y)
         };
 
-        if edge_x > point.x && point.y >= min_y && point.y < max_y {
+        if edge_x > point.x && point.y > min_y && point.y < max_y {
             count += 1;
         }
     }
